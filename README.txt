@@ -13,8 +13,9 @@ date.py: A module for the processing of date expressions in text (imported and u
 
 
 Input:
-1) A path to the notes file, where each line corresponds with a patient and takes the format MRN[tab]text blob.
-2) A path to the gold data file, where each line corresponds with a patient and takes the format MRN[tab]gold_date_1[tab]gold_date_2.
+1) A path to the notes file, where each line corresponds with a note and takes the format MRN[tab]text blob.
+2) A path to the gold data file, where each line corresponds with a patient and takes the format MRN[tab]gold_date_1[tab]gold_date_2
+...where gold_date_n takes the format YYYY, YYYY-MM, or YYYY-MM-DD.
 
 Command line usage: ./extract_keywords.py <note-file> <gold-data-file>
 
@@ -39,3 +40,9 @@ It then returns a priority queue of (keyword, position) tuples and their corresp
 Specifications:
 This program was developed in python 2.7.5.
 It uses the following python modules: sys, logging, collections, Queue, re, datetime.
+
+
+Logging:
+Set to WARNING level. To change, edit the following lines:
+extract_keywords.py: line 34
+date.py: line 15

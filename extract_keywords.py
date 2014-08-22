@@ -1,7 +1,7 @@
 #!/usr/bin/python
 
 # Written by Andrea Kahn
-# Last updated Aug. 14, 2014
+# Last updated Aug. 21, 2014
 
 '''
 This script takes as input:
@@ -31,7 +31,7 @@ import Queue
 from date import *
 
 LOG = logging.getLogger(__name__)
-LOG.setLevel(logging.WARNING)
+LOG.setLevel(logging.DEBUG)
 
 
 def main():
@@ -94,10 +94,10 @@ def get_keyword_queue(blobs_dict, gold_dates_dict):
     This method takes as input:
     (1) a dictionary of MRNs mapped to lists of text blobs (corresponding to clinic notes for that patient), and
     (2) a dictionary of MRNs mapped to lists of Date objects (corresponding to the gold dates for the event in question for that patient).
-    It then returns a priority queue of (keyword, position) tuples and their corresponding scores.
+    It then returns a priority queue of (keyword, position) tuples and their corresponding scores. (Scores returned are multiplied by -1 so that highest-scored keywords are returned first, since python's priority queue returns lowest-scored items first.)
     '''
     # In the following dictionaries:
-    # keys are (n-gram, position) 2-tuples, where 'position' is the string 'PRE' or the string 'POST', depending on whether the n-gram appeared before or after the date
+    # keys are (keyword, position) 2-tuples, where 'position' is the string 'PRE' or the string 'POST', depending on whether the n-gram appeared before or after the date
     # values are lists of the inverse of the distance to the closest correct or incorrect date given the position
     true_date_ngrams = defaultdict(lambda: [])
     false_date_ngrams = defaultdict(lambda: [])
@@ -151,11 +151,22 @@ def get_keyword_queue(blobs_dict, gold_dates_dict):
     # Extremely negative score (i.e., popped first from queue) = high correlation
     ngrams = Queue.PriorityQueue()
     for ngram in true_date_ngrams:
-#       LOG.debug("Summing distances for ngram %s" % str(ngram))
-#       LOG.debug("True date distances: %s" % true_date_ngrams[ngram])
-#       LOG.debug("False date distances: %s" % false_date_ngrams[ngram])
+        LOG.debug("Summing distances for ngram %s" % str(ngram))
+        
+        LOG.debug("True date distances: %s" % true_date_ngrams[ngram])
+        normalize_for_word_freq(true_date_ngrams[ngram])
+        LOG.debug("True date distances after normalizing for keyword frequency: %s" % true_date_ngrams[ngram])
+        normalize_for_date_freq(true_date_ngrams[ngram])
+        LOG.debug("True date distances after normalizing for true/false date frequency: %s" % true_date_ngrams[ngram])
+
+        LOG.debug("False date distances: %s" % false_date_ngrams[ngram])
+        normalize_for_word_freq(false_date_ngrams[ngram])
+        LOG.debug("False date distances after normalizing for keyword frequency: %s" % false_date_ngrams[ngram])
+        normalize_for_date_freq(false_date_ngrams[ngram])
+        LOG.debug("False date distances after normalizing for true/false date frequency: %s" % false_date_ngrams[ngram])
+
         score = sum(false_date_ngrams[ngram]) - sum(true_date_ngrams[ngram])
-#       LOG.debug("Score: %s" % score)
+        LOG.debug("Score: %s" % score)
         ngrams.put((score, ngram))
     
     return ngrams
@@ -256,6 +267,30 @@ def get_ngram_distances(token_index, date_indices, token_position):
         inv_dist_to_next_date = 0
 
     return inv_dist_to_next_date
+
+
+def normalize_for_word_freq(dist_list):
+    '''
+    This method takes a list of inverse distances to either TRUE_DATE or FALSE_DATE tokens and normalizes them to account for the relative frequency of TRUE_DATE vs. FALSE_DATE tokens.
+    '''
+    # Normalization constant is the number of times the keyword shows up in the desired position with respect to a {true, false} date
+    norm_constant = len(filter(lambda x: x > 0, dist_list))
+    LOG.debug("The word-frequency normalization constant is %s" % norm_constant)
+    if norm_constant > 0:
+        for i in xrange(len(dist_list)):
+            dist_list[i] *= 1.0/norm_constant
+
+
+def normalize_for_date_freq(dist_list):
+    '''
+    This method takes a list of inverse distances to either TRUE_DATE or FALSE_DATE tokens and normalizes them to account for the relative frequency of the keyword.
+    '''
+    # Normalization constant is the number of times the keyword shows up at all
+    norm_constant = len(dist_list)
+    LOG.debug("The date-frequency normalization constant is %s" % norm_constant)
+    if norm_constant > 0:
+        for i in xrange(len(dist_list)):
+            dist_list[i] *= 1.0/norm_constant
 
 
 if __name__=='__main__':
