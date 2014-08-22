@@ -135,16 +135,26 @@ def get_keyword_queue(blobs_dict, gold_dates_dict):
                         inv_dist_to_next_false_date = get_ngram_distances(i, false_date_indices, 'PRE-DATE')
 #                       LOG.debug("Inverse distance to next false date is %s" % inv_dist_to_next_false_date)
                         
-                        true_date_ngrams[(token, 'PRE-DATE')].append(inv_dist_to_next_true_date)
-                        false_date_ngrams[(token, 'PRE-DATE')].append(inv_dist_to_next_false_date)
+                        if inv_dist_to_next_true_date > inv_dist_to_next_false_date:
+                            true_date_ngrams[(token, 'PRE-DATE')].append(inv_dist_to_next_true_date)
+                        elif inv_dist_to_next_false_date > inv_dist_to_next_true_date:
+                            false_date_ngrams[(token, 'PRE-DATE')].append(inv_dist_to_next_false_date)
+                        else:
+                            if inv_dist_to_next_false_date != 0:
+                                LOG.warning("Inverse distance to true and false dates are the same; skipping")
                     
                         inv_dist_to_prev_true_date = get_ngram_distances(i, true_date_indices, 'POST-DATE')
 #                       LOG.debug("Inverse distance to previous true date is %s" % inv_dist_to_prev_true_date)
                         inv_dist_to_prev_false_date = get_ngram_distances(i, false_date_indices, 'POST-DATE')
 #                       LOG.debug("Inverse distance to previous false date is %s" % inv_dist_to_prev_false_date)
-                    
-                        true_date_ngrams[(token, 'POST-DATE')].append(inv_dist_to_prev_true_date)
-                        false_date_ngrams[(token, 'POST-DATE')].append(inv_dist_to_prev_false_date)
+
+                        if inv_dist_to_prev_true_date > inv_dist_to_prev_false_date:
+                            true_date_ngrams[(token, 'POST-DATE')].append(inv_dist_to_prev_true_date)
+                        elif inv_dist_to_prev_false_date > inv_dist_to_prev_true_date:
+                            false_date_ngrams[(token, 'POST-DATE')].append(inv_dist_to_prev_false_date)
+                        else:
+                            if inv_dist_to_prev_false_date != 0:
+                                LOG.warning("Inverse distance to true and false dates are the same; skipping")
 
     # Score the ngrams by taking the difference between the sum of their distances from false dates and the sum of their distances from true dates
     # Store the ngrams by these scores in a priority queue
@@ -154,16 +164,17 @@ def get_keyword_queue(blobs_dict, gold_dates_dict):
         LOG.debug("Summing distances for ngram %s" % str(ngram))
         
         LOG.debug("True date distances: %s" % true_date_ngrams[ngram])
-        normalize_for_word_freq(true_date_ngrams[ngram])
-        LOG.debug("True date distances after normalizing for keyword frequency: %s" % true_date_ngrams[ngram])
-        normalize_for_date_freq(true_date_ngrams[ngram])
-        LOG.debug("True date distances after normalizing for true/false date frequency: %s" % true_date_ngrams[ngram])
+#       normalize_for_word_freq(true_date_ngrams[ngram])
+#       LOG.debug("True date distances after normalizing for keyword frequency: %s" % true_date_ngrams[ngram])
+#       normalize_for_date_freq(true_date_ngrams[ngram])
+#       LOG.debug("True date distances after normalizing for true/false date frequency: %s" % true_date_ngrams[ngram])
 
         LOG.debug("False date distances: %s" % false_date_ngrams[ngram])
-        normalize_for_word_freq(false_date_ngrams[ngram])
-        LOG.debug("False date distances after normalizing for keyword frequency: %s" % false_date_ngrams[ngram])
-        normalize_for_date_freq(false_date_ngrams[ngram])
-        LOG.debug("False date distances after normalizing for true/false date frequency: %s" % false_date_ngrams[ngram])
+#       normalize_for_word_freq(false_date_ngrams[ngram])
+        normalize_for_word_freq_2(true_date_ngrams[ngram], false_date_ngrams[ngram])
+#       LOG.debug("False date distances after normalizing for keyword frequency: %s" % false_date_ngrams[ngram])
+#       normalize_for_date_freq(false_date_ngrams[ngram])
+#       LOG.debug("False date distances after normalizing for true/false date frequency: %s" % false_date_ngrams[ngram])
 
         score = sum(false_date_ngrams[ngram]) - sum(true_date_ngrams[ngram])
         LOG.debug("Score: %s" % score)
@@ -271,7 +282,7 @@ def get_ngram_distances(token_index, date_indices, token_position):
 
 def normalize_for_word_freq(dist_list):
     '''
-    This method takes a list of inverse distances to either TRUE_DATE or FALSE_DATE tokens and normalizes them to account for the relative frequency of TRUE_DATE vs. FALSE_DATE tokens.
+    This method takes a list of inverse distances to either TRUE_DATE or FALSE_DATE tokens and normalizes them to account for the relative frequency of the keyword.
     '''
     # Normalization constant is the number of times the keyword shows up in the desired position with respect to a {true, false} date
     norm_constant = len(filter(lambda x: x > 0, dist_list))
@@ -281,9 +292,23 @@ def normalize_for_word_freq(dist_list):
             dist_list[i] *= 1.0/norm_constant
 
 
+def normalize_for_word_freq_2(dist_list_1, dist_list_2):
+    '''
+    This method takes two lists of inverse distances to either TRUE_DATE and FALSE_DATE tokens, respectively, and normalizes them to account for the relative frequency of the keyword. This is the appropriate method to use where only the inverse distance to the closest TRUE OR FALSE date is added to the appropriate list, not the inverse distance to the closest TRUE date AND the closest FALSE date.
+    '''
+    # Normalization constant is the number of times the keyword shows up in the desired position with respect to a {true, false} date
+    norm_constant = len(dist_list_1) + len(dist_list_2)
+    LOG.debug("The word-frequency normalization constant is %s" % norm_constant)
+    if norm_constant > 0:
+        for i in xrange(len(dist_list_1)):
+            dist_list_1[i] *= 1.0/norm_constant
+        for i in xrange(len(dist_list_2)):
+            dist_list_2[i] *= 1.0/norm_constant
+
+
 def normalize_for_date_freq(dist_list):
     '''
-    This method takes a list of inverse distances to either TRUE_DATE or FALSE_DATE tokens and normalizes them to account for the relative frequency of the keyword.
+    This method takes a list of inverse distances to either TRUE_DATE or FALSE_DATE tokens and normalizes them to account for the relative frequency of TRUE_DATE vs. FALSE_DATE tokens.
     '''
     # Normalization constant is the number of times the keyword shows up at all
     norm_constant = len(dist_list)
