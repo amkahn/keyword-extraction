@@ -113,7 +113,7 @@ class Date(object):
             return (self.dt.year==other.dt.year)
         
         elif (self.day_known==False) or (other.day_known==False):
-            return (self.dt.month==other.dt.month)
+            return (self.dt.month==other.dt.month and self.dt.year==other.dt.year)
         
         else:
             return False

@@ -13,7 +13,7 @@ date.py: A module for the processing of date expressions in text (imported and u
 
 
 Input:
-1) A path to the notes file, where each line corresponds with a note and takes the format MRN[tab]text blob.
+1) A path to the notes file, where each line corresponds with a note and takes the format MRN[tab]date[tab]description[tab]text blob.
 2) A path to the gold data file, where each line corresponds with a patient and takes the format MRN[tab]gold_date_1[tab]gold_date_2
 ...where gold_date_n takes the format YYYY, YYYY-MM, or YYYY-MM-DD.
 

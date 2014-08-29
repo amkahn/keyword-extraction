@@ -5,7 +5,7 @@
 
 '''
 This script takes as input:
-1) a path to the notes file, where each line corresponds with a patient and takes the format MRN[tab]text blob, and
+1) a path to the notes file, where each line corresponds with a patient and takes the format MRN[tab]date[tab]description[tab]text blob, and
 2) a path to the gold data file, where each line corresponds with a patient and takes the format MRN[tab]gold_date_1[tab]gold_date_2 ...
 
 It then prints the standard out lines in the following format:
@@ -31,7 +31,7 @@ import Queue
 from date import *
 
 LOG = logging.getLogger(__name__)
-LOG.setLevel(logging.DEBUG)
+LOG.setLevel(logging.WARNING)
 
 
 def main():
@@ -47,12 +47,17 @@ def main():
     for line in notes_file:
         line = line.strip()
         tokens = line.split('\t')
-        if len(tokens) != 2:
-            LOG.warning("Unexpected line format (should be MRN[tab]note); skipping line: %s" % line)
+        if len(tokens) not in [3, 4]:
+            LOG.warning("Unexpected line format (should be MRN[tab]date[tab]description[tab]note); skipping line: %s" % line)
         else:
             MRN = tokens[0]
-            note = tokens[1]
-            if notes_dict.get(MRN) == None:
+
+            if len(tokens) == 3:
+                note = ''
+            else:
+                note = tokens[3]
+                
+            if not notes_dict.get(MRN):
                 notes_dict[MRN] = []
             notes_dict[MRN].append(note)
 
@@ -75,7 +80,7 @@ def main():
                     data_dict[MRN].extend(date_vals)
 
     data_file.close()
-    notes_file.close()        
+    notes_file.close()
     
     LOG.info("Getting keyword queue")
     keywords = get_keyword_queue(notes_dict, data_dict)
@@ -125,7 +130,10 @@ def get_keyword_queue(blobs_dict, gold_dates_dict):
 #                   LOG.debug("Considering token %s" % tokens[i])
                     
                     # Skip date tokens
-                    if i not in (true_date_indices + false_date_indices):
+#                   if i not in (true_date_indices + false_date_indices):
+
+                    # Skip tokens that are or encompass replaced date expressions
+                    if not any(d in tokens[i] for d in ['TRUE_DATE', 'FALSE_DATE']):
                     
                         # Ignore case
                         token = tokens[i].lower()
@@ -160,19 +168,24 @@ def get_keyword_queue(blobs_dict, gold_dates_dict):
     # Store the ngrams by these scores in a priority queue
     # Extremely negative score (i.e., popped first from queue) = high correlation
     ngrams = Queue.PriorityQueue()
+
     for ngram in true_date_ngrams:
         LOG.debug("Summing distances for ngram %s" % str(ngram))
         
         LOG.debug("True date distances: %s" % true_date_ngrams[ngram])
-#       normalize_for_word_freq(true_date_ngrams[ngram])
-#       LOG.debug("True date distances after normalizing for keyword frequency: %s" % true_date_ngrams[ngram])
+
+        # Optional normalization for false vs. true date frequency
 #       normalize_for_date_freq(true_date_ngrams[ngram])
 #       LOG.debug("True date distances after normalizing for true/false date frequency: %s" % true_date_ngrams[ngram])
 
         LOG.debug("False date distances: %s" % false_date_ngrams[ngram])
-#       normalize_for_word_freq(false_date_ngrams[ngram])
-        normalize_for_word_freq_2(true_date_ngrams[ngram], false_date_ngrams[ngram])
+
+        # Optional normalization for word frequency
+#       normalize_for_word_freq(true_date_ngrams[ngram], false_date_ngrams[ngram])
+#       LOG.debug("True date distances after normalizing for keyword frequency: %s" % true_date_ngrams[ngram])
 #       LOG.debug("False date distances after normalizing for keyword frequency: %s" % false_date_ngrams[ngram])
+
+        # Optional normalization for false vs. true date frequency
 #       normalize_for_date_freq(false_date_ngrams[ngram])
 #       LOG.debug("False date distances after normalizing for true/false date frequency: %s" % false_date_ngrams[ngram])
 
@@ -280,9 +293,10 @@ def get_ngram_distances(token_index, date_indices, token_position):
     return inv_dist_to_next_date
 
 
-def normalize_for_word_freq(dist_list):
+def normalize_for_word_freq_old(dist_list):
     '''
-    This method takes a list of inverse distances to either TRUE_DATE or FALSE_DATE tokens and normalizes them to account for the relative frequency of the keyword.
+    This method takes a list of inverse distances to either TRUE_DATE or FALSE_DATE tokens and normalizes them to account for the relative frequency of the keyword. This method will not work with the current code, since only the inverse distance to the closest TRUE OR FALSE date is added to the appropriate list; it was intended for use with an older version, when the inverse distance to the closest TRUE date AND the closest FALSE date was added.
+    (The reason is that when a distance is added to both lists for each keyword, the lists are the same length, and the list length can be used as a normalization constant, since it is the same for both lists. When the lists are different lengths, the sum of the two list lengths must be used as the normalization constant for both lists, so both lists have the same normalization constant.)
     '''
     # Normalization constant is the number of times the keyword shows up in the desired position with respect to a {true, false} date
     norm_constant = len(filter(lambda x: x > 0, dist_list))
@@ -292,9 +306,9 @@ def normalize_for_word_freq(dist_list):
             dist_list[i] *= 1.0/norm_constant
 
 
-def normalize_for_word_freq_2(dist_list_1, dist_list_2):
+def normalize_for_word_freq(dist_list_1, dist_list_2):
     '''
-    This method takes two lists of inverse distances to either TRUE_DATE and FALSE_DATE tokens, respectively, and normalizes them to account for the relative frequency of the keyword. This is the appropriate method to use where only the inverse distance to the closest TRUE OR FALSE date is added to the appropriate list, not the inverse distance to the closest TRUE date AND the closest FALSE date.
+    This method takes two lists of inverse distances to TRUE_DATE tokens and FALSE_DATE tokens, respectively, and normalizes them to account for the relative frequency of the keyword. This is the appropriate method to use in the current code, when only the inverse distance to the closest TRUE OR FALSE date is added to the appropriate list, not the inverse distance to the closest TRUE date AND the closest FALSE date.
     '''
     # Normalization constant is the number of times the keyword shows up in the desired position with respect to a {true, false} date
     norm_constant = len(dist_list_1) + len(dist_list_2)
